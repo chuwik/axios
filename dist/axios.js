@@ -1,4 +1,3 @@
-/* axios v0.8.0 | (c) 2015 by Matt Zabriskie */
 (function webpackUniversalModuleDefinition(root, factory) {
 	if(typeof exports === 'object' && typeof module === 'object')
 		module.exports = factory();
@@ -66,19 +65,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	var defaults = __webpack_require__(2);
 	var utils = __webpack_require__(3);
 	var dispatchRequest = __webpack_require__(4);
-	var InterceptorManager = __webpack_require__(12);
-	var isAbsoluteURL = __webpack_require__(13);
-	var combineURLs = __webpack_require__(14);
-	var bind = __webpack_require__(15);
+	var InterceptorManager = __webpack_require__(13);
+	var isAbsoluteURL = __webpack_require__(14);
+	var combineURLs = __webpack_require__(15);
+	var bind = __webpack_require__(16);
+	var transformData = __webpack_require__(8);
 	
 	function Axios(defaultConfig) {
-	  this.defaultConfig = utils.merge({
-	    headers: {},
-	    timeout: defaults.timeout,
-	    transformRequest: defaults.transformRequest,
-	    transformResponse: defaults.transformResponse
-	  }, defaultConfig);
-	
+	  this.defaults = utils.merge({}, defaultConfig);
 	  this.interceptors = {
 	    request: new InterceptorManager(),
 	    response: new InterceptorManager()
@@ -94,14 +88,36 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }, arguments[1]);
 	  }
 	
-	  config = utils.merge(this.defaultConfig, { method: 'get' }, config);
+	  config = utils.merge(defaults, this.defaults, { method: 'get' }, config);
 	
+	  // Support baseURL config
 	  if (config.baseURL && !isAbsoluteURL(config.url)) {
 	    config.url = combineURLs(config.baseURL, config.url);
 	  }
 	
 	  // Don't allow overriding defaults.withCredentials
-	  config.withCredentials = config.withCredentials || defaults.withCredentials;
+	  config.withCredentials = config.withCredentials || this.defaults.withCredentials;
+	
+	  // Transform request data
+	  config.data = transformData(
+	    config.data,
+	    config.headers,
+	    config.transformRequest
+	  );
+	
+	  // Flatten headers
+	  config.headers = utils.merge(
+	    config.headers.common || {},
+	    config.headers[config.method] || {},
+	    config.headers || {}
+	  );
+	
+	  utils.forEach(
+	    ['delete', 'get', 'head', 'post', 'put', 'patch', 'common'],
+	    function cleanHeaderConfig(method) {
+	      delete config.headers[method];
+	    }
+	  );
 	
 	  // Hook up interceptors middleware
 	  var chain = [dispatchRequest, undefined];
@@ -122,8 +138,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  return promise;
 	};
 	
-	var defaultInstance = new Axios();
-	
+	var defaultInstance = new Axios(defaults);
 	var axios = module.exports = bind(Axios.prototype.request, defaultInstance);
 	
 	axios.create = function create(defaultConfig) {
@@ -131,13 +146,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	};
 	
 	// Expose defaults
-	axios.defaults = defaults;
+	axios.defaults = defaultInstance.defaults;
 	
 	// Expose all/spread
 	axios.all = function all(promises) {
 	  return Promise.all(promises);
 	};
-	axios.spread = __webpack_require__(16);
+	axios.spread = __webpack_require__(17);
 	
 	// Expose interceptors
 	axios.interceptors = defaultInstance.interceptors;
@@ -454,7 +469,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	function merge(/* obj1, obj2, obj3, ... */) {
 	  var result = {};
 	  function assignValue(val, key) {
-	    result[key] = val;
+	    if (typeof result[key] === 'object' && typeof val === 'object') {
+	      result[key] = merge(result[key], val);
+	    } else {
+	      result[key] = val;
+	    }
 	  }
 	
 	  for (var i = 0, l = arguments.length; i < l; i++) {
@@ -521,30 +540,19 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	/*global ActiveXObject:true*/
 	
-	var defaults = __webpack_require__(2);
 	var utils = __webpack_require__(3);
 	var buildURL = __webpack_require__(6);
 	var parseHeaders = __webpack_require__(7);
 	var transformData = __webpack_require__(8);
 	var isURLSameOrigin = __webpack_require__(9);
-	var btoa = window.btoa || __webpack_require__(10);
+	var ieVersion = __webpack_require__(10);
+	var btoa = window.btoa || __webpack_require__(11);
 	
 	module.exports = function xhrAdapter(resolve, reject, config) {
-	  // Transform request data
-	  var data = transformData(
-	    config.data,
-	    config.headers,
-	    config.transformRequest
-	  );
+	  var requestData = config.data;
+	  var requestHeaders = config.headers;
 	
-	  // Merge headers
-	  var requestHeaders = utils.merge(
-	    defaults.headers.common,
-	    defaults.headers[config.method] || {},
-	    config.headers || {}
-	  );
-	
-	  if (utils.isFormData(data)) {
+	  if (utils.isFormData(requestData)) {
 	    delete requestHeaders['Content-Type']; // Let the browser set it
 	  }
 	
@@ -553,7 +561,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  var xDomain = false;
 	
 	  // For IE 8/9 CORS support
-	  if (!isURLSameOrigin(config.url) && window.XDomainRequest) {
+	  if (ieVersion() <= 9 && !isURLSameOrigin(config.url) && window.XDomainRequest) {
 	    Adapter = window.XDomainRequest;
 	    loadEvent = 'onload';
 	    xDomain = true;
@@ -604,22 +612,22 @@ return /******/ (function(modules) { // webpackBootstrap
 	  // This is only done if running in a standard browser environment.
 	  // Specifically not if we're in a web worker, or react-native.
 	  if (utils.isStandardBrowserEnv()) {
-	    var cookies = __webpack_require__(11);
+	    var cookies = __webpack_require__(12);
 	
 	    // Add xsrf header
-	    var xsrfValue =  config.withCredentials || isURLSameOrigin(config.url) ?
-	        cookies.read(config.xsrfCookieName || defaults.xsrfCookieName) :
+	    var xsrfValue = config.withCredentials || isURLSameOrigin(config.url) ?
+	        cookies.read(config.xsrfCookieName) :
 	        undefined;
 	
 	    if (xsrfValue) {
-	      requestHeaders[config.xsrfHeaderName || defaults.xsrfHeaderName] = xsrfValue;
+	      requestHeaders[config.xsrfHeaderName] = xsrfValue;
 	    }
 	  }
 	
 	  // Add headers to the request
 	  if (!xDomain) {
 	    utils.forEach(requestHeaders, function setRequestHeader(val, key) {
-	      if (!data && key.toLowerCase() === 'content-type') {
+	      if (!requestData && key.toLowerCase() === 'content-type') {
 	        // Remove Content-Type if data is undefined
 	        delete requestHeaders[key];
 	      } else {
@@ -644,13 +652,22 @@ return /******/ (function(modules) { // webpackBootstrap
 	      }
 	    }
 	  }
+	  
+	  // Handle progress if needed
+	  if (config.progress) {
+	    if (config.method.toLowerCase() === 'post' || config.method.toLowerCase() === 'put') {
+	      request.upload.addEventListener('progress', config.progress);
+	    } else if (config.method.toLowerCase() === 'get') {
+	      request.addEventListener('progress', config.progress);
+	    }
+	  }
 	
-	  if (utils.isArrayBuffer(data)) {
-	    data = new DataView(data);
+	  if (utils.isArrayBuffer(requestData)) {
+	    requestData = new DataView(requestData);
 	  }
 	
 	  // Send the request
-	  request.send(data);
+	  request.send(requestData);
 	};
 
 
@@ -876,6 +893,35 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	'use strict';
 	
+	/**
+	 * https://gist.github.com/padolsey/527683
+	 *
+	 * A short snippet for detecting versions of IE in JavaScript
+	 * without resorting to user-agent sniffing
+	 *
+	 * @returns {Number|undefined} Number of IE version (5-9), otherwise undefined
+	 */
+	module.exports = function ieVersion() {
+	  var undef;
+	  var v = 3;
+	  var div = document.createElement('div');
+	  var all = div.getElementsByTagName('i');
+	
+	  while ((
+	    div.innerHTML = '<!--[if gt IE ' + (++v) + ']><i></i><![endif]-->',
+	    all[0]
+	  ));
+	
+	  return v > 4 ? v : undef;
+	};
+
+
+/***/ },
+/* 11 */
+/***/ function(module, exports) {
+
+	'use strict';
+	
 	// btoa polyfill for IE<10 courtesy https://github.com/davidchambers/Base64.js
 	
 	var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
@@ -913,7 +959,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 11 */
+/* 12 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -972,7 +1018,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 12 */
+/* 13 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -1030,7 +1076,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 13 */
+/* 14 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1050,7 +1096,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 14 */
+/* 15 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1068,7 +1114,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 15 */
+/* 16 */
 /***/ function(module, exports) {
 
 	'use strict';
@@ -1085,7 +1131,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 16 */
+/* 17 */
 /***/ function(module, exports) {
 
 	'use strict';
