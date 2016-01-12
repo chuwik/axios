@@ -652,7 +652,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	      }
 	    }
 	  }
-	  
+	
 	  // Handle progress if needed
 	  if (config.progress) {
 	    if (config.method.toLowerCase() === 'post' || config.method.toLowerCase() === 'put') {

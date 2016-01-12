@@ -50,6 +50,7 @@ declare module axios {
     xsrfHeaderName?: string;
     paramsSerializer?: (params: any) => string;
     baseURL?: string;
+    progress?: (progressEvent: ProgressEvent) => void;
   }
 
   interface RequestOptions extends InstanceOptions {
