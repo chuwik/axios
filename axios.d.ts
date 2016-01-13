@@ -10,9 +10,9 @@ declare module axios {
     get(url: string, config?: any): axios.Promise;
     delete(url: string, config?: any): axios.Promise;
     head(url: string, config?: any): axios.Promise;
-    post(url: string, data: any, config?: any): axios.Promise;
-    put(url: string, data: any, config?: any): axios.Promise;
-    patch(url: string, data: any, config?: any): axios.Promise;
+    post(url: string, data?: any, config?: any): axios.Promise;
+    put(url: string, data?: any, config?: any): axios.Promise;
+    patch(url: string, data?: any, config?: any): axios.Promise;
   }
 
   interface AxiosStatic extends AxiosRequestMethods {
